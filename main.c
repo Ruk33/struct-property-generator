@@ -236,6 +236,8 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
 
     // consume struct keyword
     consume_token(tokenizer);
+    if (!token_matches(tokenizer->token, "struct"))
+        return;
     // consume name
     consume_token(tokenizer);
     printf(
@@ -321,6 +323,12 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
 
         printf("%s{\n", identation);
 
+        printf("%stmp = 0;\n", identation);
+
+        // check for null pointers
+        if (is_pointer)
+            printf("%sif (src->%.*s%s)\n%s", identation, name.len, name.text, is_array ? "[i]" : "", identation);
+
         // print char
         if (token_matches(type, "char")) {
             printf(
@@ -333,7 +341,6 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
                 name.text,
                 is_array ? "[i]" : ""
             );
-            printf("%sif (tmp > 0) written += tmp;\n", identation);
         }
         // print int or enum or short
         else if (is_enum || token_matches(type, "int") || token_matches(type, "short")) {
@@ -347,7 +354,6 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
                 name.text,
                 is_array ? "[i]" : ""
             );
-            printf("%sif (tmp > 0) written += tmp;\n", identation);
         }
         // print float or double
         else if (token_matches(type, "float") || token_matches(type, "double")) {
@@ -361,7 +367,6 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
                 name.text,
                 is_array ? "[i]" : ""
             );
-            printf("%sif (tmp > 0) written += tmp;\n", identation);
         }
         // print size_t or long
         else if (token_matches(type, "size_t") || token_matches(type, "long")) {
@@ -375,12 +380,11 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
                 name.text,
                 is_array ? "[i]" : ""
             );
-            printf("%sif (tmp > 0) written += tmp;\n", identation);
         }
         // if no c type was found, then try calling a "print_type" function
         else {
             printf(
-                "%swritten += print_%.*s(dest + written, n - written, %ssrc->%.*s%s);\n",
+                "%stmp = print_%.*s(dest + written, n - written, %ssrc->%.*s%s);\n",
                 identation,
                 type.len,
                 type.text,
@@ -390,6 +394,17 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
                 is_array ? "[i]" : ""
             );
         }
+        // check for null pointers
+        if (is_pointer) {
+            printf("%selse\n%s", identation, identation);
+            printf(
+                "%stmp = snprintf(dest + written, n - written, \"%.*s: NULL\\n\");\n",
+                identation,
+                name.len,
+                name.text
+            );
+        }
+        printf("%sif (tmp > 0) written += tmp;\n", identation);
         printf("%s}\n", identation);
     }
     // add null terminator to buffer
