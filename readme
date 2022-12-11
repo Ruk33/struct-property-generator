@@ -6,11 +6,16 @@ STRUCT PROPERTY GENERATOR
 
 USAGE
     
+    Download the executable from the releases page.
+    You are more than welcome to build from the source code using the 
+    build.bat (Windows) script or build.sh (Linux) The project uses tcc as
+    the C compiler but GCC, Clang or Zig should also work.
+
     Windows:
     spg.exe file1.h file2.c file3.h > generated.c
 
     Linux:
-    spg file1.h file2.c file3.h > generated.c    
+    spg.linux file1.h file2.c file3.h > generated.c    
 
 
 EXAMPLE
