@@ -3,6 +3,14 @@ STRUCT PROPERTY GENERATOR
     This is a simple program to generate functions to "print" structs to a 
     destination buffer for C programs.
 
+USAGE
+    
+    Windows:
+    spg.exe file1.h file2.c file3.h > generated.c
+
+    Linux:
+    spg file1.h file2.c file3.h > generated.c    
+
 
 EXAMPLE
 
