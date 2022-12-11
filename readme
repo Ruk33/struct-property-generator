@@ -1,0 +1,72 @@
+STRUCT PROPERTY GENERATOR
+    This is a simple program to generate functions to "print" structs to a 
+    destination buffer for C programs.
+
+EXAMPLE
+    Given the following file input:
+
+    --
+    // examples/file.h
+    #define generate_properties
+
+    generate_properties struct foo {
+        int bar;
+        char *baz;
+    };
+    --
+
+    You can use the generator as spg.exe examples/file.h > examples/generated.c, 
+    which creates the following file result:
+
+    --
+    // generated.c
+    #include <stddef.h>
+    #include <stdio.h>
+    int print_foo(char *dest, int n, struct foo *src)
+    {
+        if (!dest || !src) return 0;
+        int written = 0;
+        int tmp = 0;
+        {
+        tmp = snprintf(dest + written, n - written, "bar: %d\n", src->bar);
+        if (tmp > 0) written += tmp;
+        }
+        {
+        tmp = snprintf(dest + written, n - written, "baz: %s\n", src->baz);
+        if (tmp > 0) written += tmp;
+        }
+        dest[written] = 0;
+        return written;
+    }
+
+    --
+
+    Which can later be used as:
+
+    --
+    struct foo f = {0};
+    f.bar = 42;
+    f.baz = "lorem ipsum dolor sit amet";
+    char buf[128] = {0};
+    print_foo(buf, sizeof(buf), &f);
+    printf("%s\n", buf);
+    // prints
+    // bar: 42
+    // baz: lorem ipsum dolor sit amet
+    --
+
+HOW IT WORKS
+    The program parses and scans all the files passed as parameters and searches
+    for structs with the prefix "generate_properties". Only those structs
+    will be processed. In order to not have any warnings/errors in your code,
+    make sure to #define generate_properties. This will get replaced with
+    and empty string in the end result but will help this program identify the
+    structs that should be handled.
+
+LIMITATIONS
+    - The program only parses simple structs.
+    - Only one level of pointers is supported.
+    - No union is supported.
+    - No typedef is supported.
+    - Beware of null pointers since they aren't handled yet.
+    - No weird macros in types is supported.
