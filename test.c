@@ -15,6 +15,9 @@ int main(void)
     s.size_t_property = 42;
     s.sint = -21;
     s.uint = 333;
+    s.custom_type = 101;
+    s.st.foo = 9999;
+    s.is.baz = 44444444;
     char buf[256] = {0};
     print_some_other_struct(buf, sizeof(buf), &s);
     printf("generated:\n");
@@ -32,7 +35,11 @@ int main(void)
         "fixed_string: %s\n"
         "size_t_property: %ld\n"
         "sint: %d\n"
-        "uint: %d\n",
+        "uint: %d\n"
+        "custom_type: %d\n"
+        "st.foo: %d\n"
+        "is.baz: %d\n"
+        ,
         s.bar[0],
         s.bar[1],
         s.bar[2],
@@ -41,7 +48,10 @@ int main(void)
         s.fixed_string,
         s.size_t_property,
         s.sint,
-        s.uint
+        s.uint,
+        s.custom_type,
+        s.st.foo,
+        s.is.baz
     );
     printf("--\n");
     printf("expected:\n");

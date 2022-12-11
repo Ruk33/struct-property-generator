@@ -21,6 +21,32 @@ int print_foo(char *dest, int n, struct foo *src)
     dest[written] = 0;
     return written;
 }
+int print_struct_as_type(char *dest, int n, struct struct_as_type *src)
+{
+    if (!dest || !src) return 0;
+    int written = 0;
+    int tmp = 0;
+    {
+    tmp = 0;
+    tmp = snprintf(dest + written, n - written, "foo: %d\n", src->foo);
+    if (tmp > 0) written += tmp;
+    }
+    dest[written] = 0;
+    return written;
+}
+int print_inline_struct(char *dest, int n, struct inline_struct *src)
+{
+    if (!dest || !src) return 0;
+    int written = 0;
+    int tmp = 0;
+    {
+    tmp = 0;
+    tmp = snprintf(dest + written, n - written, "baz: %d\n", src->baz);
+    if (tmp > 0) written += tmp;
+    }
+    dest[written] = 0;
+    return written;
+}
 int print_some_other_struct(char *dest, int n, struct some_other_struct *src)
 {
     if (!dest || !src) return 0;
@@ -69,6 +95,25 @@ int print_some_other_struct(char *dest, int n, struct some_other_struct *src)
     {
     tmp = 0;
     tmp = snprintf(dest + written, n - written, "uint: %d\n", src->uint);
+    if (tmp > 0) written += tmp;
+    }
+    {
+    tmp = 0;
+    tmp = snprintf(dest + written, n - written, "custom_type: %d\n", src->custom_type);
+    if (tmp > 0) written += tmp;
+    }
+    {
+    tmp = 0;
+    tmp = snprintf(dest + written, n - written, "st.");
+    if (tmp > 0) written += tmp;
+    tmp = print_struct_as_type(dest + written, n - written, &src->st);
+    if (tmp > 0) written += tmp;
+    }
+    {
+    tmp = 0;
+    tmp = snprintf(dest + written, n - written, "is.");
+    if (tmp > 0) written += tmp;
+    tmp = print_inline_struct(dest + written, n - written, &src->is);
     if (tmp > 0) written += tmp;
     }
     dest[written] = 0;

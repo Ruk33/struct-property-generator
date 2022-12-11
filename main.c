@@ -2,6 +2,7 @@
 #include <stdlib.h> // malloc, free, size_t
 #include <stdio.h>  // printf, fopen, fclose, ftell, fseek, SEEK_END, SEEK_SET
 #include <ctype.h>  // isspace, isalpha, isdigit
+#include <string.h> // strncmp
 
 enum token_type {
     token_none,
@@ -31,11 +32,18 @@ struct token {
     enum token_type type;
 };
 
+struct type_alias {
+    struct token parent;
+    struct token alias;
+};
+
 struct tokenizer {
     const char *file;
     const char *cursor;
     struct token prev;
     struct token token;
+    struct type_alias aliases[256];
+    size_t aliases_count;
 };
 
 static char *read_file(const char *file_path)
@@ -223,6 +231,54 @@ static void consume_token(struct tokenizer *tokenizer)
     tokenizer->cursor = tokenizer->token.text + tokenizer->token.len;
 }
 
+static struct token get_original_type(struct tokenizer *tokenizer, struct token alias)
+{
+    assert(tokenizer);
+    for (size_t i = 0; i < tokenizer->aliases_count; i++) {
+        if (tokenizer->aliases[i].alias.len != alias.len)
+            continue;
+        if (strncmp(tokenizer->aliases[i].alias.text, alias.text, alias.len) != 0)
+            continue;
+        if (tokenizer->aliases[i].parent.type == token_none)
+            return alias;
+        return get_original_type(tokenizer, tokenizer->aliases[i].parent);
+    }
+    return alias;
+}
+
+static void parse_typedef(struct tokenizer *tokenizer)
+{
+    assert(tokenizer);
+    if (tokenizer->token.type != token_identifier)
+        return;
+    if (!token_matches(tokenizer->token, "typedef"))
+        return;
+    // typedef
+    consume_token(tokenizer);
+    // generate_properties for inline structs
+    int is_inline_struct = token_matches(tokenizer->token, "generate_properties");
+    if (is_inline_struct)
+        consume_token(tokenizer);
+    // struct
+    if (token_matches(tokenizer->token, "struct"))
+        consume_token(tokenizer);
+    tokenizer->aliases[tokenizer->aliases_count].parent = tokenizer->token;
+    // print_token(tokenizer->token);
+
+    // if it's inline, find the end of the struct and yes
+    // i know this should be recursive since we could have
+    // structs inside of structs but i'm not going to 
+    // support those silly cases.
+    if (is_inline_struct)
+        while (tokenizer->token.type != token_close_brace && tokenizer->token.type != token_eof)
+            consume_token(tokenizer);
+    while (tokenizer->token.type != token_colon && tokenizer->token.type != token_eof)
+        consume_token(tokenizer);
+    tokenizer->aliases[tokenizer->aliases_count].alias = tokenizer->prev;
+    // print_token(tokenizer->prev);
+    tokenizer->aliases_count++;
+}
+
 static void parse_generate_properties(struct tokenizer *tokenizer)
 {
     assert(tokenizer);
@@ -277,7 +333,7 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
         // signed
         if (tokenizer->token.type == token_identifier && token_matches(tokenizer->token, "signed"))
             consume_token(tokenizer);
-        struct token type = tokenizer->token;
+        struct token type = get_original_type(tokenizer, tokenizer->token);
         // print_token(tokenizer->token);
         consume_token(tokenizer);
         // pointer *
@@ -300,9 +356,6 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
             // consume ;
             // consume_token(tokenizer);
         }
-
-        // todo:
-        // make sure pointers aren't null.
 
         // special case for fixed size strings
         if (!is_pointer && is_array && token_matches(type, "char")) {
@@ -383,6 +436,8 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
         }
         // if no c type was found, then try calling a "print_type" function
         else {
+            printf("%stmp = snprintf(dest + written, n - written, \"%.*s.\");\n", identation, name.len, name.text);
+            printf("%sif (tmp > 0) written += tmp;\n", identation);
             printf(
                 "%stmp = print_%.*s(dest + written, n - written, %ssrc->%.*s%s);\n",
                 identation,
@@ -415,6 +470,8 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
 
 int main(int argc, char **argv)
 {
+    static struct tokenizer tokenizer = {0};
+
     if (argc <= 1) {
         printf("usage example:\n");
         printf("    %s file.h file.c ...\n", argv[0]);
@@ -425,12 +482,27 @@ int main(int argc, char **argv)
     printf("#include <stddef.h>\n");
     printf("#include <stdio.h>\n");
     for (int i = 1; i < argc; i++) {
-        struct tokenizer tokenizer = {0};
         tokenizer.file = read_file(argv[i]);
+        tokenizer.cursor = 0;
+        tokenizer.token = (struct token) {0};
+        tokenizer.prev = (struct token) {0};
         if (!tokenizer.file) {
             printf("// file: %s was not able to be processed.\n", argv[i]);
             continue;
         }
+        while (tokenizer.token.type != token_eof) {
+            consume_token(&tokenizer);
+            parse_typedef(&tokenizer);
+        }
+        free((void *) tokenizer.file);
+    }
+    for (int i = 1; i < argc; i++) {
+        tokenizer.file = read_file(argv[i]);
+        tokenizer.cursor = 0;
+        tokenizer.token = (struct token) {0};
+        tokenizer.prev = (struct token) {0};
+        // reset tokenizer
+        tokenizer.cursor = 0;
         while (tokenizer.token.type != token_eof) {
             consume_token(&tokenizer);
             parse_generate_properties(&tokenizer);
