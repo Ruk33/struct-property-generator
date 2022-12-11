@@ -89,7 +89,6 @@ LIMITATIONS
     - Only one level of pointers is supported.
     - No union is supported.
     - No typedef is supported.
-    - Beware of null pointers since they aren't handled yet.
     - No weird macros in types is supported.
 
 
