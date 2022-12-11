@@ -85,3 +85,9 @@ LIMITATIONS
     - No typedef is supported.
     - Beware of null pointers since they aren't handled yet.
     - No weird macros in types is supported.
+
+
+WARNING
+
+    Please keep in mind this is very early version and may contain
+    a lot of bugs.
