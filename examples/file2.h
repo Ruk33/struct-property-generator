@@ -15,6 +15,8 @@ typedef generate_properties struct inline_struct {
     int baz;
 } is;
 
+typedef union { int foo; } union_type;
+
 generate_properties struct some_other_struct {
     int bar[4];
     char *dynamic_string;
@@ -26,4 +28,9 @@ generate_properties struct some_other_struct {
     yet_another_custom_type custom_type;
     st st;
     is is;
+    union_type ignore_me_again;
+    union {
+        int foo;
+    } ignore_me;
+    int another_property;
 };

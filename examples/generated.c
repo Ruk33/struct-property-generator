@@ -116,6 +116,20 @@ int print_some_other_struct(char *dest, int n, struct some_other_struct *src)
     tmp = print_inline_struct(dest + written, n - written, &src->is);
     if (tmp > 0) written += tmp;
     }
+    /*
+    {
+    tmp = 0;
+    tmp = snprintf(dest + written, n - written, "ignore_me_again.");
+    if (tmp > 0) written += tmp;
+    tmp = print_{(dest + written, n - written, &src->ignore_me_again);
+    if (tmp > 0) written += tmp;
+    }
+    */
+    {
+    tmp = 0;
+    tmp = snprintf(dest + written, n - written, "another_property: %d\n", src->another_property);
+    if (tmp > 0) written += tmp;
+    }
     dest[written] = 0;
     return written;
 }

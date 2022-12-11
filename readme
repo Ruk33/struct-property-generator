@@ -87,7 +87,7 @@ LIMITATIONS
 
     - The program only parses simple structs.
     - Only one level of pointers is supported.
-    - No union is supported.
+    - Unions will be ignored.
     - No weird macros in types is supported.
 
 

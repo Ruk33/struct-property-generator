@@ -30,6 +30,10 @@ struct token {
     const char *text;
     size_t len;
     enum token_type type;
+    // yes i know this doesn't go here
+    // but it's convenient
+    int is_union;
+    int is_enum;
 };
 
 struct type_alias {
@@ -231,6 +235,45 @@ static void consume_token(struct tokenizer *tokenizer)
     tokenizer->cursor = tokenizer->token.text + tokenizer->token.len;
 }
 
+static void revert_to_prev_token(struct tokenizer *tokenizer)
+{
+    assert(tokenizer);
+    assert(tokenizer->cursor);
+    tokenizer->cursor = tokenizer->prev.text;
+    // prev is wrong but i don't think we really need it
+    // when reverting
+    // tokenizer->prev = tokenizer->token;
+    tokenizer->token = get_token(tokenizer->cursor);
+    tokenizer->cursor = tokenizer->token.text + tokenizer->token.len;
+}
+
+// static struct token peek_token(struct tokenizer *tokenizer)
+// {
+//     assert(tokenizer);
+//     assert(tokenizer->cursor);
+//     return get_token(tokenizer->cursor);
+// }
+
+static int consume_token_type(struct tokenizer *tokenizer, enum token_type type)
+{
+    assert(tokenizer);
+    if (tokenizer->token.type == type) {
+        consume_token(tokenizer);
+        return 1;
+    }
+    return 0;
+}
+
+static int consume_keyword(struct tokenizer *tokenizer, const char *keyword)
+{
+    assert(tokenizer);
+    if (tokenizer->token.type == token_identifier && token_matches(tokenizer->token, keyword)) {
+        consume_token(tokenizer);
+        return 1;
+    }
+    return 0;
+}
+
 static struct token get_original_type(struct tokenizer *tokenizer, struct token alias)
 {
     assert(tokenizer);
@@ -246,56 +289,148 @@ static struct token get_original_type(struct tokenizer *tokenizer, struct token 
     return alias;
 }
 
+static void skip_union(struct tokenizer *tokenizer);
+
+static void skip_struct_property(struct tokenizer *tokenizer)
+{
+    // type
+    if (tokenizer->token.type != token_identifier)
+        return;
+    if (token_matches(tokenizer->token, "union"))
+        return;
+    if (token_matches(tokenizer->token, "struct"))
+        return;
+    if (token_matches(tokenizer->token, "union"))
+        return;
+    while (tokenizer->token.type != token_colon && tokenizer->token.type != token_eof)
+        consume_token(tokenizer);
+    // consume ;
+    consume_token_type(tokenizer, token_colon);
+}
+
+static void skip_enum(struct tokenizer *tokenizer)
+{
+    assert(tokenizer);
+    if (!consume_keyword(tokenizer, "enum"))
+        return;
+    // consume name
+    consume_token_type(tokenizer, token_identifier);
+    // {
+    if (!consume_token_type(tokenizer, token_open_brace))
+        return;
+    while (tokenizer->token.type != token_close_brace && tokenizer->token.type != token_eof)
+        consume_token(tokenizer);
+    // }
+    consume_token_type(tokenizer, token_close_brace);
+    // consume ;
+    consume_token_type(tokenizer, token_colon);
+}
+
+static void skip_struct(struct tokenizer *tokenizer)
+{
+    assert(tokenizer);
+    if (!consume_keyword(tokenizer, "struct"))
+        return;
+    // consume name
+    consume_token_type(tokenizer, token_identifier);
+    // {
+    if (!consume_token_type(tokenizer, token_open_brace))
+        return;
+    while (tokenizer->token.type != token_close_brace && tokenizer->token.type != token_eof) {
+        skip_union(tokenizer);
+        skip_struct(tokenizer);
+        skip_enum(tokenizer);
+        skip_struct_property(tokenizer);
+    }
+    // }
+    consume_token_type(tokenizer, token_close_brace);
+    // consume property name
+    // consume_token_type(tokenizer, token_identifier);
+    // consume ;
+    consume_token_type(tokenizer, token_colon);
+}
+
+static void skip_union(struct tokenizer *tokenizer)
+{
+    assert(tokenizer);
+    if (!consume_keyword(tokenizer, "union"))
+        return;
+    // consume name
+    consume_token_type(tokenizer, token_identifier);
+    // {
+    if (!consume_token_type(tokenizer, token_open_brace))
+        return;
+    while (tokenizer->token.type != token_close_brace && tokenizer->token.type != token_eof) {
+        // consume_token(tokenizer);
+        int is_union = token_matches(tokenizer->token, "union");
+        int is_struct = token_matches(tokenizer->token, "struct");
+        int is_enum = token_matches(tokenizer->token, "enum");
+        if (is_union || is_struct ||is_enum) {
+            skip_union(tokenizer);
+            skip_struct(tokenizer);
+            skip_enum(tokenizer);
+            // skip property's name
+            consume_token_type(tokenizer, token_identifier);
+            // ;
+            consume_token_type(tokenizer, token_colon);
+        }
+        skip_struct_property(tokenizer);
+    }
+    // }
+    consume_token_type(tokenizer, token_close_brace);
+    // consume property name
+    // consume_token_type(tokenizer, token_identifier);
+    // consume ;
+    consume_token_type(tokenizer, token_colon);
+}
+
 static void parse_typedef(struct tokenizer *tokenizer)
 {
     assert(tokenizer);
-    if (tokenizer->token.type != token_identifier)
+    if (!consume_keyword(tokenizer, "typedef"))
         return;
-    if (!token_matches(tokenizer->token, "typedef"))
-        return;
-    // typedef
-    consume_token(tokenizer);
     // generate_properties for inline structs
-    int is_inline_struct = token_matches(tokenizer->token, "generate_properties");
-    if (is_inline_struct)
-        consume_token(tokenizer);
-    // struct
-    if (token_matches(tokenizer->token, "struct"))
-        consume_token(tokenizer);
+    consume_keyword(tokenizer, "generate_properties");
+    // union or struct
+    int is_union = consume_keyword(tokenizer, "union");
+    int is_struct = consume_keyword(tokenizer, "struct");
+    int is_enum = consume_keyword(tokenizer, "enum");
+    // todo: check if the struct has a name or if it's anon
     tokenizer->aliases[tokenizer->aliases_count].parent = tokenizer->token;
-    // print_token(tokenizer->token);
-
-    // if it's inline, find the end of the struct and yes
-    // i know this should be recursive since we could have
-    // structs inside of structs but i'm not going to 
-    // support those silly cases.
-    if (is_inline_struct)
-        while (tokenizer->token.type != token_close_brace && tokenizer->token.type != token_eof)
-            consume_token(tokenizer);
-    while (tokenizer->token.type != token_colon && tokenizer->token.type != token_eof)
-        consume_token(tokenizer);
-    tokenizer->aliases[tokenizer->aliases_count].alias = tokenizer->prev;
-    // print_token(tokenizer->prev);
+    tokenizer->aliases[tokenizer->aliases_count].parent.is_union = is_union;
+    tokenizer->aliases[tokenizer->aliases_count].parent.is_enum = is_enum;    
+    if (is_union || is_struct || is_enum) {
+        revert_to_prev_token(tokenizer);
+        skip_struct(tokenizer);
+        skip_union(tokenizer);
+        skip_enum(tokenizer);
+    } else {
+        // consume type
+        consume_token_type(tokenizer, token_identifier);
+    }
+    // if (tokenizer->aliases[tokenizer->aliases_count].parent.type != token_identifier) {
+    //     tokenizer->aliases[tokenizer->aliases_count].parent.text = tokenizer->token.text;
+    //     tokenizer->aliases[tokenizer->aliases_count].parent.len = tokenizer->token.len;
+    // }
+    tokenizer->aliases[tokenizer->aliases_count].alias = tokenizer->token;
     tokenizer->aliases_count++;
+    // typedef name
+    consume_token_type(tokenizer, token_identifier);
+    // ;
+    // consume_token_type(tokenizer, token_colon);
 }
 
 static void parse_generate_properties(struct tokenizer *tokenizer)
 {
     assert(tokenizer);
     // we only care about structs prefixed with "generate_properties"
-    if (tokenizer->token.type != token_identifier)
-        return;
-    if (!token_matches(tokenizer->token, "generate_properties"))
+    if (!consume_keyword(tokenizer, "generate_properties"))
         return;
     if (token_matches(tokenizer->prev, "define"))
         return;
-
     // consume struct keyword
-    consume_token(tokenizer);
-    if (!token_matches(tokenizer->token, "struct"))
+    if (!consume_keyword(tokenizer, "struct"))
         return;
-    // consume name
-    consume_token(tokenizer);
     printf(
         "int print_%.*s(char *dest, int n, struct %.*s *src)\n",
         tokenizer->token.len,
@@ -303,66 +438,56 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
         tokenizer->token.len,
         tokenizer->token.text
     );
+    // consume name
+    consume_token_type(tokenizer, token_identifier);
     char *identation = "    ";
     printf("{\n");
     printf("%sif (!dest || !src) return 0;\n", identation);
     printf("%sint written = 0;\n", identation);
     printf("%sint tmp = 0;\n", identation);
     // consume {
-    consume_token(tokenizer);
+    consume_token_type(tokenizer, token_open_brace);
     // consume properties
-    while (1) {
-        // type, const, enum or struct
-        consume_token(tokenizer);
-        // print_token(tokenizer->token);
-        if (tokenizer->token.type != token_identifier)
-            break;
-        // const
-        if (tokenizer->token.type == token_identifier && token_matches(tokenizer->token, "const"))
-            consume_token(tokenizer);
-        // struct
-        if (tokenizer->token.type == token_identifier && token_matches(tokenizer->token, "struct"))
-            consume_token(tokenizer);
-        // enum
-        int is_enum = tokenizer->token.type == token_identifier && token_matches(tokenizer->token, "enum");
-        if (is_enum)
-            consume_token(tokenizer);
-        // unsigned
-        if (tokenizer->token.type == token_identifier && token_matches(tokenizer->token, "unsigned"))
-            consume_token(tokenizer);
-        // signed
-        if (tokenizer->token.type == token_identifier && token_matches(tokenizer->token, "signed"))
-            consume_token(tokenizer);
-        struct token type = get_original_type(tokenizer, tokenizer->token);
-        // print_token(tokenizer->token);
-        consume_token(tokenizer);
-        // pointer *
-        int is_pointer = tokenizer->token.type == token_star;
-        if (is_pointer)
-            consume_token(tokenizer);
-        struct token name = tokenizer->token;
-        // print_token(tokenizer->token);
-
-        // check if it's an array
-        consume_token(tokenizer);
-        int is_array = tokenizer->token.type == token_open_brackets;
-        if (is_array) {
-            // find colon ;
-            while (tokenizer->token.type != token_colon)
-                consume_token(tokenizer);
-            // todo: this is a bit weird, for some reason
-            // it's not required to consume the colon token.
-            // 
-            // consume ;
-            // consume_token(tokenizer);
+    while (tokenizer->token.type != token_close_brace && tokenizer->token.type != token_eof) {
+        // skip union if detected
+        if (token_matches(tokenizer->token, "union")) {
+            skip_union(tokenizer);
+            // skip the property's name
+            consume_token_type(tokenizer, token_identifier);
+            consume_token_type(tokenizer, token_colon);
         }
+        // const
+        consume_keyword(tokenizer, "const");
+        // struct
+        consume_keyword(tokenizer, "struct");
+        // enum
+        int is_enum = consume_keyword(tokenizer, "enum");
+        // unsigned
+        consume_keyword(tokenizer, "unsigned");
+        // signed
+        consume_keyword(tokenizer, "signed");
+        struct token type = get_original_type(tokenizer, tokenizer->token);
+        consume_token_type(tokenizer, token_identifier);
+        // pointer *
+        int is_pointer = consume_token_type(tokenizer, token_star);
+        struct token name = tokenizer->token;
+        consume_token_type(tokenizer, token_identifier);
+        // check if it's an array
+        int is_array = consume_token_type(tokenizer, token_open_brackets);
+        // find colon ;
+        while (tokenizer->token.type != token_colon && tokenizer->token.type != token_eof)
+            consume_token(tokenizer);
+        consume_token_type(tokenizer, token_colon);
 
+        // printing code
+        int is_union = type.is_union;
+        if (is_union)
+            printf("%s/*\n", identation);
         // special case for fixed size strings
         if (!is_pointer && is_array && token_matches(type, "char")) {
             is_array = 0;
             is_pointer = 1;
         }
-
         // array
         if (is_array)
             printf(
@@ -373,15 +498,11 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
                 name.len,
                 name.text
             );
-
         printf("%s{\n", identation);
-
         printf("%stmp = 0;\n", identation);
-
         // check for null pointers
         if (is_pointer)
             printf("%sif (src->%.*s%s)\n%s", identation, name.len, name.text, is_array ? "[i]" : "", identation);
-
         // print char
         if (token_matches(type, "char")) {
             printf(
@@ -396,7 +517,7 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
             );
         }
         // print int or enum or short
-        else if (is_enum || token_matches(type, "int") || token_matches(type, "short")) {
+        else if (is_enum || type.is_enum || token_matches(type, "int") || token_matches(type, "short")) {
             printf(
                 "%stmp = snprintf(dest + written, n - written, \"%.*s: %%d\\n\", %ssrc->%.*s%s);\n",
                 identation,
@@ -461,7 +582,14 @@ static void parse_generate_properties(struct tokenizer *tokenizer)
         }
         printf("%sif (tmp > 0) written += tmp;\n", identation);
         printf("%s}\n", identation);
+        if (is_union)
+            printf("%s*/\n", identation);
     }
+    // }
+    consume_token_type(tokenizer, token_close_brace);
+    // don't consume it, let the main function do it.
+    // ;
+    // consume_token_type(tokenizer, token_colon);
     // add null terminator to buffer
     printf("%sdest[written] = 0;\n", identation);
     printf("%sreturn written;\n", identation);
@@ -496,6 +624,13 @@ int main(int argc, char **argv)
         }
         free((void *) tokenizer.file);
     }
+    // for (size_t i = 0; i < tokenizer.aliases_count; i++) {
+    //     printf("parent\n");
+    //     print_token(tokenizer.aliases[i].parent);
+    //     printf("alias\n");
+    //     print_token(tokenizer.aliases[i].alias);
+    //     printf("\n\n");
+    // }
     for (int i = 1; i < argc; i++) {
         tokenizer.file = read_file(argv[i]);
         tokenizer.cursor = 0;

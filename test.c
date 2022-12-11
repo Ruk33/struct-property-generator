@@ -39,6 +39,7 @@ int main(void)
         "custom_type: %d\n"
         "st.foo: %d\n"
         "is.baz: %d\n"
+        "another_property: %d\n"
         ,
         s.bar[0],
         s.bar[1],
@@ -51,7 +52,8 @@ int main(void)
         s.uint,
         s.custom_type,
         s.st.foo,
-        s.is.baz
+        s.is.baz,
+        s.another_property
     );
     printf("--\n");
     printf("expected:\n");
